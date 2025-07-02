@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pico-Cross</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for the crossword cells */
+        .crossword-cell {
+            width: 4rem; /* Fixed width for cells */
+            height: 4rem; /* Fixed height for cells */
+            text-align: center;
+            font-size: 2.5rem;
+            text-transform: uppercase;
+            border: 2px solid #cbd5e0; /* lightgray */
+            border-radius: 0.5rem; /* rounded-lg */
+            background-color: #f8fafc; /* slate-50 */
+            color: #1e293b; /* slate-800 */
+            font-family: 'Inter', sans-serif;
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06); /* shadow-sm */
+        }
+
+        .crossword-cell:focus {
+            outline: none;
+            border-color: #3b82f6; /* blue-500 */
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5); /* ring-4 ring-blue-300 */
+            background-color: #e0f2fe; /* blue-50 */
+        }
+
+        .crossword-cell.correct {
+            background-color: #d1fae5; /* green-100 */
+            border-color: #34d399; /* green-400 */
+        }
+
+        .crossword-cell.incorrect {
+            background-color: #fee2e2; /* red-100 */
+            border-color: #ef4444; /* red-500 */
+        }
+
+        /* Number overlay for cells */
+        .cell-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .cell-number {
+            position: absolute;
+            top: 0.25rem; /* px-1 */
+            left: 0.25rem; /* py-1 */
+            font-size: 0.75rem; /* text-xs */
+            font-weight: bold;
+            color: #64748b; /* slate-500 */
+            pointer-events: none; /* Make sure it doesn't interfere with input focus */
+        }
+
+        /* Hide default number input arrows */
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type="number"] {
+            -moz-appearance: textfield;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-100 to-purple-100 min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white p-8 rounded-xl shadow-2xl max-w-lg w-full flex flex-col items-center space-y-6 border border-gray-200">
+        <!-- Removed the h1 title here -->
+
+        <!-- Crossword Grid -->
+        <div id="crossword-grid" class="grid grid-cols-2 gap-2 p-4 border-4 border-blue-500 rounded-lg bg-blue-50 shadow-inner">
+            <!-- Cells will be dynamically generated here by JavaScript -->
+        </div>
+
+        <!-- Clues Section -->
+        <div class="w-full text-left p-4 bg-gray-50 rounded-lg shadow-md border border-gray-200">
+            <h2 class="text-2xl font-bold text-gray-800 mb-3">Clues</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 text-gray-700">
+                <div class="space-y-1">
+                    <h3 class="font-semibold text-lg text-blue-700">Across:</h3>
+                    <p id="clue-1-across" class="text-base"></p>
+                    <p id="clue-2-across" class="text-base"></p>
+                </div>
+                <div class="space-y-1">
+                    <h3 class="font-semibold text-lg text-purple-700">Down:</h3>
+                    <p id="clue-1-down" class="text-base"></p>
+                    <p id="clue-2-down" class="text-base"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Buttons -->
+        <div class="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4 w-full justify-center">
+            <button id="check-puzzle-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-full shadow-lg transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-green-300">
+                Check Puzzle
+            </button>
+            <button id="new-game-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-full shadow-lg transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-blue-300">
+                New Game
+            </button>
+        </div>
+
+        <!-- Message Box -->
+        <div id="message-box" class="mt-4 p-3 rounded-lg text-center text-lg font-medium hidden w-full"></div>
+    </div>
+
+    <script>
+        // Define the word list with clues
+        const wordList = [
+            { word: "AM", clue: "Morning abbreviation" }, { word: "AN", clue: "Indefinite article" },
+            { word: "AS", clue: "Like, similar to" }, { word: "AT", clue: "Location preposition" },
+            { word: "AX", clue: "Chopping tool" }, { word: "BE", clue: "To exist" },
+            { word: "BY", clue: "Near; past" }, { word: "DO", clue: "Perform an action" },
+            { word: "GO", clue: "Move or proceed" }, { word: "HE", clue: "Male pronoun" },
+            { word: "HI", clue: "Greeting" }, { word: "IF", clue: "Conditional conjunction" },
+            { word: "IN", clue: "Inside" }, { word: "IS", clue: "Present tense of 'to be'" },
+            { word: "IT", clue: "Neutral pronoun" }, { word: "ME", clue: "Object pronoun" },
+            { word: "MY", clue: "Possessive pronoun" }, { word: "NO", clue: "Opposite of yes" },
+            { word: "OF", clue: "Belonging to" }, { word: "ON", clue: "Position on top of" },
+            { word: "OR", clue: "Alternative conjunction" }, { word: "OX", clue: "Large bovine animal" },
+            { word: "PA", clue: "Dad (informal)" }, { word: "SO", clue: "Therefore" },
+            { word: "TO", clue: "Preposition of direction" }, { word: "UP", clue: "Towards a higher place" },
+            { word: "US", clue: "Object pronoun for 'we'" }, { word: "WE", clue: "First person plural pronoun" },
+            { word: "AG", clue: "Agricultural abbreviation" }, { word: "MO", clue: "A moment, informal" },
+            { word: "OH", clue: "Expression of surprise" }, { word: "OK", clue: "All right" },
+            { word: "PI", clue: "Mathematical constant" }, { word: "RE", clue: "Musical note" },
+            { word: "SI", clue: "Musical note" }, { word: "TI", clue: "Musical note" },
+            { word: "UN", clue: "Prefix meaning 'not'" }, { word: "UT", clue: "Musical note (archaic)" },
+            { word: "WO", clue: "Expression of sorrow (archaic)" }, { word: "XI", clue: "Chinese leader's surname" },
+            { word: "YE", clue: "Archaic 'you'" }, { word: "BY", clue: "Near; past" },
+            { word: "DA", clue: "Yes (Russian, informal)" }, { word: "DE", clue: "Of (French)" },
+            { word: "ED", clue: "Common male name abbreviation" }, { word: "EM", clue: "Printer's measure" },
+            { word: "ET", clue: "And (Latin)" }, { word: "FA", clue: "Musical note" },
+            { word: "FE", clue: "Iron (chemical symbol)" }, { word: "HA", clue: "Sound of laughter" },
+            { word: "HO", clue: "Exclamation of surprise" }, { word: "ID", clue: "Part of the psyche" },
+            { word: "LA", clue: "Musical note" }, { word: "LI", clue: "Chinese unit of distance" },
+            { word: "LO", clue: "Behold (archaic)" }, { word: "MA", clue: "Mom (informal)" },
+            { word: "MU", clue: "Greek letter" }, { word: "NA", clue: "Sodium (chemical symbol)" },
+            { word: "NE", clue: "North-east" }, { word: "NU", clue: "Greek letter" },
+            { word: "OD", clue: "Odor (archaic)" }, { word: "OE", "clue": "A small island (archaic)" },
+            { word: "OP", clue: "Short for operation" }, { word: "OS", clue: "Bone (medical)" },
+            { word: "OW", clue: "Exclamation of pain" }, { word: "PE", clue: "Hebrew letter" },
+            { word: "PO", clue: "Chamber pot (informal)" }, { word: "QI", clue: "Life force (Chinese)" },
+            { word: "RE", clue: "Concerning" }, { word: "RY", clue: "Rye (archaic)" },
+            { word: "SA", clue: "A type of dance" }, { word: "SE", clue: "South-east" },
+            { word: "SI", clue: "Musical note" }, { word: "TA", clue: "Thank you (informal)" },
+            { word: "TE", clue: "Musical note" }, { word: "TI", clue: "Musical note" },
+            { word: "UG", clue: "Expression of disgust" }, { word: "UM", clue: "Hesitation sound" },
+            { word: "UT", clue: "Musical note (archaic)" }, { word: "VU", clue: "Vietnamese surname" },
+            { word: "WA", clue: "Japanese unit of length" }, { word: "WO", clue: "Woe" },
+            { word: "WU", clue: "Chinese surname" }, { word: "XA", clue: "Abbreviation for X-ray" },
+            { word: "XE", clue: "Xenon (chemical symbol)" }, { word: "YA", clue: "You (informal)" },
+            { word: "YO", clue: "Exclamation of greeting" }, { word: "ZA", clue: "Pizza (informal)" },
+            { word: "ZE", clue: "Gender-neutral pronoun" }, { word: "ZO", clue: "A hybrid animal" }
+        ];
+
+        let solution = {}; // Stores the correct words and clues for the current puzzle
+        let inputs = []; // Stores references to the input elements in the grid
+
+        const crosswordGrid = document.getElementById('crossword-grid');
+        const clue1AcrossEl = document.getElementById('clue-1-across');
+        const clue2AcrossEl = document.getElementById('clue-2-across');
+        const clue1DownEl = document.getElementById('clue-1-down');
+        const clue2DownEl = document.getElementById('clue-2-down');
+        const checkPuzzleBtn = document.getElementById('check-puzzle-btn');
+        const newGameBtn = document.getElementById('new-game-btn');
+        const messageBox = document.getElementById('message-box');
+
+        /**
+         * Displays a message in the message box.
+         * @param {string} message - The message to display.
+         * @param {string} type - The type of message ('success', 'error', 'info').
+         */
+        function showMessage(message, type) {
+            messageBox.textContent = message;
+            messageBox.className = 'mt-4 p-3 rounded-lg text-center text-lg font-medium w-full'; // Reset classes
+            messageBox.classList.remove('hidden');
+
+            switch (type) {
+                case 'success':
+                    messageBox.classList.add('bg-green-100', 'text-green-800', 'border', 'border-green-400');
+                    break;
+                case 'error':
+                    messageBox.classList.add('bg-red-100', 'text-red-800', 'border', 'border-red-400');
+                    break;
+                case 'info':
+                    messageBox.classList.add('bg-blue-100', 'text-blue-800', 'border', 'border-blue-400');
+                    break;
+                default:
+                    messageBox.classList.add('bg-gray-100', 'text-gray-800', 'border', 'border-gray-400');
+            }
+        }
+
+        /**
+         * Hides the message box.
+         */
+        function hideMessage() {
+            messageBox.classList.add('hidden');
+        }
+
+        /**
+         * Generates a valid 2x2 crossword puzzle.
+         * It attempts to find four words from the wordList that satisfy the intersection rules.
+         * @returns {object|null} An object containing the solution words and clues, or null if no valid puzzle found after attempts.
+         */
+        function generatePuzzle() {
+            const maxAttempts = 1000; // Limit attempts to prevent infinite loops
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                const availableWords = [...wordList];
+
+                // 1. Pick a random word for 1 Across (W1A) - cells (0,0) and (0,1)
+                const w1aIndex = Math.floor(Math.random() * availableWords.length);
+                const word1Across = availableWords[w1aIndex];
+                availableWords.splice(w1aIndex, 1); // Remove it from available words
+
+                // 2. Find a word for 1 Down (W1D) - cells (0,0) and (1,0)
+                // W1D's first letter must match W1A's first letter (cell 0,0)
+                const compatibleW1D = availableWords.filter(w => w.word[0] === word1Across.word[0]);
+                if (compatibleW1D.length === 0) continue; // No compatible word, try again
+
+                const word1Down = compatibleW1D[Math.floor(Math.random() * compatibleW1D.length)];
+                availableWords.splice(availableWords.findIndex(w => w.word === word1Down.word), 1);
+
+                // 3. Find a word for 2 Across (W2A) - cells (1,0) and (1,1)
+                // W2A's first letter must match W1D's second letter (cell 1,0)
+                const compatibleW2A = availableWords.filter(w => w.word[0] === word1Down.word[1]);
+                if (compatibleW2A.length === 0) continue; // No compatible word, try again
+
+                const word2Across = compatibleW2A[Math.floor(Math.random() * compatibleW2A.length)];
+                availableWords.splice(availableWords.findIndex(w => w.word === word2Across.word), 1);
+
+                // 4. Find a word for 2 Down (W2D) - cells (0,1) and (1,1)
+                // W2D's first letter must match W1A's second letter (cell 0,1) AND
+                // W2D's second letter must match W2A's second letter (cell 1,1)
+                const compatibleW2D = availableWords.filter(w =>
+                    w.word[0] === word1Across.word[1] &&
+                    w.word[1] === word2Across.word[1]
+                );
+                if (compatibleW2D.length === 0) continue; // No compatible word, try again
+
+                const word2Down = compatibleW2D[Math.floor(Math.random() * compatibleW2D.length)];
+
+                // If we reached here, we found a valid combination!
+                return {
+                    word1Across: word1Across,
+                    word2Across: word2Across,
+                    word1Down: word1Down,
+                    word2Down: word2Down
+                };
+            }
+            console.error("Failed to generate a valid 2x2 puzzle after multiple attempts.");
+            return null; // No valid puzzle found after max attempts
+        }
+
+
+        /**
+         * Renders the crossword grid and populates it with input fields.
+         * Assigns numbers to cells based on the standard 2x2 clue numbering.
+         */
+        function renderGrid() {
+            crosswordGrid.innerHTML = ''; // Clear existing grid
+            inputs = []; // Clear existing input references
+
+            // Create 2x2 grid of input elements
+            for (let i = 0; i < 2; i++) { // rows
+                for (let j = 0; j < 2; j++) { // columns
+                    const cellWrapper = document.createElement('div');
+                    cellWrapper.className = 'cell-wrapper';
+
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.maxLength = 1;
+                    input.classList.add('crossword-cell');
+                    input.dataset.row = i;
+                    input.dataset.col = j;
+                    input.id = `cell-${i}-${j}`; // Unique ID for each cell
+                    inputs.push(input);
+                    cellWrapper.appendChild(input);
+
+                    const cellNumber = document.createElement('div');
+                    cellNumber.classList.add('cell-number');
+
+                    // Assign clue numbers based on standard 2x2 crossword numbering
+                    if (i === 0 && j === 0) {
+                        cellNumber.textContent = '1'; // Starts 1 Across and 1 Down
+                    } else if (i === 0 && j === 1) {
+                        cellNumber.textContent = '2'; // Starts 2 Down
+                    } else if (i === 1 && j === 0) {
+                        cellNumber.textContent = '3'; // Starts 2 Across
+                    }
+
+                    if (cellNumber.textContent) { // Only append if there's a number
+                        cellWrapper.appendChild(cellNumber);
+                    }
+                    crosswordGrid.appendChild(cellWrapper);
+                }
+            }
+        }
+
+        /**
+         * Renders the clues based on the current solution, using the standard 2x2 numbering.
+         */
+        function renderClues() {
+            clue1AcrossEl.textContent = `1. ${solution.word1Across.clue}`;
+            clue2AcrossEl.textContent = `3. ${solution.word2Across.clue}`; // Now 3 Across
+            clue1DownEl.textContent = `1. ${solution.word1Down.clue}`;
+            clue2DownEl.textContent = `2. ${solution.word2Down.clue}`;
+        }
+
+        /**
+         * Moves the cursor focus to a specific cell.
+         * @param {number} row - The target row.
+         * @param {number} col - The target column.
+         */
+        function moveCursor(row, col) {
+            if (row >= 0 && row < 2 && col >= 0 && col < 2) {
+                const targetInput = document.getElementById(`cell-${row}-${col}`);
+                if (targetInput) {
+                    targetInput.focus();
+                }
+            }
+        }
+
+        /**
+         * Handles keyboard input for the crossword cells.
+         * @param {Event} event - The keyboard event.
+         */
+        function handleInput(event) {
+            const target = event.target;
+            if (!target.classList.contains('crossword-cell')) return;
+
+            const row = parseInt(target.dataset.row);
+            const col = parseInt(target.dataset.col);
+
+            hideMessage(); // Hide any previous messages on user input
+
+            if (event.key.match(/^[a-zA-Z]$/)) {
+                // Letter input
+                target.value = event.key.toUpperCase();
+                // Move to the next cell in reading order (left-to-right, then top-to-bottom)
+                if (col < 1) {
+                    moveCursor(row, col + 1);
+                } else if (row < 1) {
+                    moveCursor(row + 1, 0);
+                }
+                event.preventDefault(); // Prevent default character input
+            } else if (event.key === 'Backspace') {
+                // Backspace
+                if (target.value === '') {
+                    // If current cell is empty, move to previous cell and clear it
+                    if (col > 0) {
+                        moveCursor(row, col - 1);
+                        document.getElementById(`cell-${row}-${col - 1}`).value = '';
+                    } else if (row > 0) {
+                        moveCursor(row - 1, 1);
+                        document.getElementById(`cell-${row - 1}-${1}`).value = '';
+                    }
+                } else {
+                    // If current cell has a value, just clear it
+                    target.value = '';
+                }
+                event.preventDefault(); // Prevent default backspace behavior
+            } else if (event.key === 'ArrowRight') {
+                moveCursor(row, col + 1);
+                event.preventDefault();
+            } else if (event.key === 'ArrowLeft') {
+                moveCursor(row, col - 1);
+                event.preventDefault();
+            } else if (event.key === 'ArrowDown') {
+                moveCursor(row + 1, col);
+                event.preventDefault();
+            } else if (event.key === 'ArrowUp') {
+                moveCursor(row - 1, col);
+                event.preventDefault();
+            }
+        }
+
+        /**
+         * Checks the current state of the puzzle against the solution, highlighting individual cells.
+         */
+        function checkPuzzle() {
+            let allCorrect = true;
+
+            // Clear previous feedback classes from all cells
+            inputs.forEach(input => {
+                input.classList.remove('correct', 'incorrect');
+            });
+
+            // Define the correct letters for each cell based on the solution
+            const correctLetters = {
+                '0-0': solution.word1Across.word[0], // Also solution.word1Down.word[0]
+                '0-1': solution.word1Across.word[1], // Also solution.word2Down.word[0]
+                '1-0': solution.word2Across.word[0], // Also solution.word1Down.word[1]
+                '1-1': solution.word2Across.word[1]  // Also solution.word2Down.word[1]
+            };
+
+            // Iterate through each input cell and check its value
+            inputs.forEach(input => {
+                const row = input.dataset.row;
+                const col = input.dataset.col;
+                const cellId = `${row}-${col}`;
+                const userChar = input.value.toUpperCase();
+                const correctChar = correctLetters[cellId];
+
+                if (userChar === correctChar) {
+                    input.classList.add('correct');
+                } else {
+                    input.classList.add('incorrect');
+                    allCorrect = false; // If even one character is wrong, the whole puzzle is not solved
+                }
+            });
+
+            if (allCorrect) {
+                showMessage("Congratulations! You solved the puzzle!", 'success');
+            } else {
+                showMessage("Some letters are incorrect. Keep trying!", 'error');
+            }
+        }
+
+        /**
+         * Resets the grid and starts a new game.
+         */
+        function newGame() {
+            // Clear input values and remove styling
+            inputs.forEach(input => {
+                input.value = '';
+                input.classList.remove('correct', 'incorrect');
+            });
+            hideMessage();
+            solution = generatePuzzle();
+            if (solution) {
+                renderClues();
+                // Focus on the first cell
+                moveCursor(0, 0);
+            } else {
+                showMessage("Could not generate a new puzzle. Please try again.", 'error');
+            }
+        }
+
+        // Event Listeners
+        crosswordGrid.addEventListener('keydown', handleInput);
+        checkPuzzleBtn.addEventListener('click', checkPuzzle);
+        newGameBtn.addEventListener('click', newGame);
+
+        // Initialize the game when the window loads
+        window.onload = function() {
+            renderGrid(); // Render the empty grid first
+            newGame();    // Generate and display the first puzzle
+        };
+    </script>
+</body>
+</html>
